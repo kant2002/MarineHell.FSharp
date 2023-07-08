@@ -353,45 +353,43 @@ type MarineHell() =
 
                     if (workerAttacked <> Position.Invalid) then
                         marine.Attack(workerAttacked) |> ignore
+            )
 
-                if (workers.Count > 7 && this._searcher = null) then
-                    this._searcher <- workers[7]
+            if (workers.Count > 7 && this._searcher = null) then
+                this._searcher <- workers[7]
 
-                if (this._searcher <> null && this._searcher.IsGatheringMinerals() && _searchingScv < baseLocations.Count && _searchingTimeout % 10 = 0) then
-                    this._searcher.Move(baseLocations[_searchingScv].Center) |> ignore
-                    _searchingScv <- _searchingScv + 1
+            if (this._searcher <> null && this._searcher.IsGatheringMinerals() && _searchingScv < baseLocations.Count && _searchingTimeout % 10 = 0) then
+                this._searcher.Move(baseLocations[_searchingScv].Center) |> ignore
+                _searchingScv <- _searchingScv + 1
 
-                if workers.Count <> 0 then
-                    let lastWorker = if workers.Count > 7 then workers[7] else workers[workers.Count - 1]
-                    _debugText <- $"Size: {workers.Count}; isGathering{lastWorker.IsGatheringMinerals()}; location: {baseLocations.Count}; num: {_searchingScv}";
+            if workers.Count <> 0 then
+                let lastWorker = if workers.Count > 7 then workers[7] else workers[workers.Count - 1]
+                _debugText <- $"Size: {workers.Count}; isGathering{lastWorker.IsGatheringMinerals()}; location: {baseLocations.Count}; num: {_searchingScv}";
 
-                let enemyUnits = this._game.Enemy().GetUnits()
-                for u in enemyUnits do
-                    // if this unit is in fact a building
-                    if (u.GetUnitType().IsBuilding()) then
-                        // check if we have it's position in memory and add it if we don't
-                        _enemyBuildingMemory.Add(u.GetPosition()) |> ignore
+            let enemyUnits = this._game.Enemy().GetUnits()
+            let enemyBuildings = enemyUnits |> Seq.filter (fun u -> u.GetUnitType().IsBuilding())
+            for u in enemyBuildings do
+                // check if we have it's position in memory and add it if we don't
+                _enemyBuildingMemory.Add(u.GetPosition()) |> ignore
 
-                // loop over all the positions that we remember
-                _enemyBuildingMemory |> Seq.exists (fun p ->
-                    // compute the TilePosition corresponding to our remembered Position p
-                    let tileCorrespondingToP = new TilePosition(p.X / 32, p.Y / 32)
-                    // if that tile is currently visible to us...
-                    if (this._game.IsVisible(tileCorrespondingToP)) then
-                        // loop over all the visible enemy buildings and find out if at
-                        // least one of them is still at that remembered position
-                        //let buildingStillThere = false
-                        let buildingStillThere = enemyUnits |> Seq.exists (fun u -> u.GetUnitType().IsBuilding() && (u.GetPosition() = p))
-                        // if there is no more any building, remove that position from our memory
-                        if (not buildingStillThere) then
-                            _enemyBuildingMemory.Remove(p) |> ignore
-                            true
-                        else
-                            false
+            // loop over all the positions that we remember
+            _enemyBuildingMemory |> Seq.exists (fun savedPosition ->
+                // compute the TilePosition corresponding to our remembered Position p
+                let savedTilePosition = new TilePosition(savedPosition.X / 32, savedPosition.Y / 32)
+                // if that tile is currently visible to us...
+                if (this._game.IsVisible(savedTilePosition)) then
+                    // loop over all the visible enemy buildings and find out if at
+                    // least one of them is still at that remembered position
+                    let buildingStillThere = enemyBuildings |> Seq.exists (fun u -> u.GetPosition() = savedPosition)
+                    // if there is no more any building, remove that position from our memory
+                    if (not buildingStillThere) then
+                        _enemyBuildingMemory.Remove(savedPosition) |> ignore
+                        true
                     else
                         false
-                ) |> ignore
-            )
+                else
+                    false
+            ) |> ignore
         
 printfn "MarineHell in F#"
 let bot = new MarineHell();
