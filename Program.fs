@@ -3,8 +3,6 @@ open BWAPI.NET
 open BWEM.NET
 open Nito.Collections
 
-//type Map = BWEM.Map
-
 type Strategy =
 | WaitFor50
 | AttackAtAllCost
@@ -23,6 +21,15 @@ let CalculateSides (wp : Deque<WalkPosition>) =
 
     (p1.ToPosition(), p2.ToPosition())
 
+let GetNearestChokepointCenter (position: Position) (chokePointsCenters: Position list) = 
+    if chokePointsCenters.Length > 0 then
+        chokePointsCenters |> Seq.minBy (fun x -> x.GetDistance(position))
+    else
+        position
+
+let emptyTrainingQueue (unit: Unit) =
+    unit.GetTrainingQueue().Count = 0
+
 type MarineHell() =
     inherit DefaultBWListener()
     [<DefaultValue>] val mutable private _bwClient : BWClient
@@ -33,7 +40,6 @@ type MarineHell() =
     let mutable _maxCyclesForSearching = 0
     let mutable _searchingScv = 0
     let mutable _searchingTimeout = 0
-    let mutable _dontBuild = false
     let mutable _timeout = 0
     [<DefaultValue>] val mutable private _bunkerBuilder : Unit
     [<DefaultValue>] val mutable private _searcher : Unit
@@ -45,7 +51,7 @@ type MarineHell() =
 
 
     member this.GetNearestChokepointCenter position = 
-        if this._chokePointsCenters.Length > 0 then this._chokePointsCenters |> Seq.minBy (fun x -> x.GetDistance(position)) else position
+        GetNearestChokepointCenter position this._chokePointsCenters
 
     static member GetNearestBaseLocation tilePosition =
         MarineHell.map.Bases |> Seq.minBy (fun x -> x.Location.GetDistance(tilePosition))
@@ -138,7 +144,6 @@ type MarineHell() =
         _maxCyclesForSearching <- 0
         _searchingScv <- 0
         _searchingTimeout <- 0
-        _dontBuild <- false
         _timeout <- 0
         this._bunkerBuilder <- null
         this._searcher <- null
@@ -168,8 +173,7 @@ type MarineHell() =
         * 2; if (x == 0) { selectedStrategy = Strategy.FindEnemy; } else {
         * selectedStrategy = Strategy.HugeAttack; } }
         *)
-        if _maxCyclesForSearching > 300000 then
-            _dontBuild <- true
+        let canBuild = _maxCyclesForSearching <= 300000
 
         this._game.SetLocalSpeed(0)
 
@@ -220,20 +224,26 @@ type MarineHell() =
                 myUnit.Attack(myUnit.GetPosition()) |> ignore
         )
 
-        workers |> Seq.iter (fun myUnit ->
-            // if it's a worker and it's idle, send it to the closest mineral patch
-            if (myUnit.GetUnitType().IsWorker() && myUnit.IsIdle()) then
-                let skip = bunker.IsNone && this._bunkerBuilder <> null && myUnit.Equals(this._bunkerBuilder) && barracks.Count > 0
-                let mutable closestMineral : Unit option = None
+        let idle_worker (myUnit : Unit) = 
+            myUnit.GetUnitType().IsWorker() && myUnit.IsIdle()
+
+        let mineralFieldUnits = this._game.Neutral().GetUnits() |> Seq.filter (fun neutralUnit -> neutralUnit.GetUnitType().IsMineralField())
+        workers
+            |> Seq.filter idle_worker // if it's a worker and it's idle, 
+            |> Seq.iter (fun myUnit -> // send it to the closest mineral patch
+                let planToBuildBarrack = match (bunker) with
+                                            | None -> this._bunkerBuilder <> null && myUnit.Equals(this._bunkerBuilder) && barracks.Count > 0
+                                            | Some(_) -> false
 
                 // find the closest mineral
-                for neutralUnit in this._game.Neutral().GetUnits() do
-                    if (neutralUnit.GetUnitType().IsMineralField()) then
-                        if closestMineral.IsNone || (myUnit.GetDistance(neutralUnit) < myUnit.GetDistance(closestMineral.Value)) then
-                            closestMineral <- Some neutralUnit
+                let find_closest_mineral (closestUnitOption: Unit option) (neutralUnit: Unit) =
+                    match closestUnitOption with
+                    | None -> Some(neutralUnit)
+                    | Some(closestUnit) -> if myUnit.GetDistance(neutralUnit) < myUnit.GetDistance(closestUnit) then Some(neutralUnit) else closestUnitOption
+                let closestMineral : Unit option = mineralFieldUnits |> Seq.fold find_closest_mineral None
 
                 // if a mineral patch was found, send the worker to gather it
-                if not skip then
+                if not planToBuildBarrack then
                     match (closestMineral) with
                     | Some(closestMineral) -> myUnit.Gather(closestMineral, false) |> ignore
                     | None -> ()
@@ -249,7 +259,7 @@ type MarineHell() =
         if (this._bunkerBuilder = null && workers.Count > 10) then 
             this._bunkerBuilder <- workers[10]
 
-        if (bunker.IsNone && barracks.Count >= 1 && workers.Count > 10 && not _dontBuild) then
+        if (bunker.IsNone && barracks.Count >= 1 && workers.Count > 10 && canBuild) then
             this._game.SetLocalSpeed(20)
             if (_timeout < 200) then
                 this._game.DrawTextMap(this._bunkerBuilder.GetPosition(), $"Moving to create bunker {_timeout}/400")
@@ -275,22 +285,33 @@ type MarineHell() =
         if (_frameskip = 0) then
             _searchingTimeout <- _searchingTimeout + 1
 
-            workers |> Seq.iteri (fun i worker ->
-                if worker.IsGatheringMinerals() && not _dontBuild then
-                    if (this._self.Minerals() >= 150 * i && barracks.Count < 6) then
-                        let buildTile = this.GetBuildTile(worker, UnitType.Terran_Barracks, this._self.GetStartLocation())
-                        if (buildTile <> TilePosition.Invalid) then
-                            worker.Build(UnitType.Terran_Barracks, buildTile) |> ignore
+            if canBuild then
+                workers
+                    |> Seq.filter (fun worker -> worker.IsGatheringMinerals())
+                    |> Seq.iteri (fun i worker ->
+                        let barrackBuildSatisfied =
+                            this._self.Minerals() >= 150 * i 
+                                && barracks.Count < 6
+                        let supplyDepotSatisfied =
+                            this._self.Minerals() >= i * 100 
+                                && this._self.SupplyUsed() + (this._self.SupplyUsed() / 3) >= this._self.SupplyTotal()
+                                && this._self.SupplyTotal() < 400
 
-                    if (this._self.Minerals() >= i * 100 && this._self.SupplyUsed() + (this._self.SupplyUsed() / 3) >= this._self.SupplyTotal() && this._self.SupplyTotal() < 400) then
-                        let buildTile = this.GetBuildTile(worker, UnitType.Terran_Supply_Depot, this._self.GetStartLocation())
-                        // and, if found, send the worker to build it (and leave others alone - break;)
-                        if (buildTile <> TilePosition.Invalid) then
-                            worker.Build(UnitType.Terran_Supply_Depot, buildTile) |> ignore
-            )
+                        let targetBuilding = match (supplyDepotSatisfied, barrackBuildSatisfied) with
+                                             | (true, true) -> UnitType.Terran_Supply_Depot
+                                             | (true, false) -> UnitType.Terran_Supply_Depot
+                                             | (false, true) -> UnitType.Terran_Barracks
+                                             | (false, false) -> UnitType.None
+                        if targetBuilding <> UnitType.None then
+                            let buildTile = this.GetBuildTile(worker, targetBuilding, this._self.GetStartLocation())
+                            // and, if found, send the worker to build it (and leave others alone - break;)
+                            if (buildTile <> TilePosition.Invalid) then
+                                worker.Build(targetBuilding, buildTile) |> ignore
+                )
 
-            barracks |> Seq.iter (fun barrack ->
-                if (barrack.GetTrainingQueue().Count = 0) then
+            barracks
+                |> Seq.filter emptyTrainingQueue
+                |> Seq.iter (fun barrack ->
                     barrack.Build(UnitType.Terran_Marine) |> ignore
             )
 
@@ -314,16 +335,17 @@ type MarineHell() =
                             if (k < allLocations.Count) then
                                 marine.Attack(allLocations[k].Center) |> ignore
                     else
-                        let mutable newPos : Position = new Position()
-                        if (bunker.IsSome) then
-                            let path = MarineHell.GetShortestPath(bunker.Value.GetTilePosition(), MarineHell.GetStartLocation(this._game.Self()).Location)
-                            if (path.Count > 1) then
-                                newPos <- path[1].ToPosition()
+                        let find_closest_chokepoint (bunker : Unit option) =
+                            if (bunker.IsSome) then
+                                let path = MarineHell.GetShortestPath(bunker.Value.GetTilePosition(), MarineHell.GetStartLocation(this._game.Self()).Location)
+                                if (path.Count > 1) then
+                                    path[1].ToPosition()
+                                else
+                                    this.GetNearestChokepointCenter(marine.GetPosition())
                             else
-                                newPos <- this.GetNearestChokepointCenter(marine.GetPosition())
-                        else
-                            newPos <- this.GetNearestChokepointCenter(marine.GetPosition())
+                                this.GetNearestChokepointCenter(marine.GetPosition())
 
+                        let newPos = find_closest_chokepoint bunker
                         marine.Attack(newPos) |> ignore
 
                     if (bunker.IsSome && bunker.Value.GetLoadedUnits().Count < 4 && k < 4) then
@@ -339,11 +361,12 @@ type MarineHell() =
                     this._searcher.Move(baseLocations[_searchingScv].Center) |> ignore
                     _searchingScv <- _searchingScv + 1
 
-                if workers.Count = 0 then
+                if workers.Count <> 0 then
                     let lastWorker = if workers.Count > 7 then workers[7] else workers[workers.Count - 1]
                     _debugText <- $"Size: {workers.Count}; isGathering{lastWorker.IsGatheringMinerals()}; location: {baseLocations.Count}; num: {_searchingScv}";
 
-                for u in this._game.Enemy().GetUnits() do
+                let enemyUnits = this._game.Enemy().GetUnits()
+                for u in enemyUnits do
                     // if this unit is in fact a building
                     if (u.GetUnitType().IsBuilding()) then
                         // check if we have it's position in memory and add it if we don't
@@ -358,7 +381,7 @@ type MarineHell() =
                         // loop over all the visible enemy buildings and find out if at
                         // least one of them is still at that remembered position
                         //let buildingStillThere = false
-                        let buildingStillThere = this._game.Enemy().GetUnits() |> Seq.exists (fun u -> u.GetUnitType().IsBuilding() && (u.GetPosition() = p))
+                        let buildingStillThere = enemyUnits |> Seq.exists (fun u -> u.GetUnitType().IsBuilding() && (u.GetPosition() = p))
                         // if there is no more any building, remove that position from our memory
                         if (not buildingStillThere) then
                             _enemyBuildingMemory.Remove(p) |> ignore
