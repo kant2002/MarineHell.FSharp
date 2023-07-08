@@ -3,20 +3,25 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "MarineHell.FSharp", "MarineHell.FSharp.fsproj", "{1F4E6D3D-445C-441A-9FD0-F8FF88C9A259}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "MarineHell.FSharp", "MarineHell.FSharp.fsproj", "{1F4E6D3D-445C-441A-9FD0-F8FF88C9A259}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{E71BCC38-39BA-44FD-AE7A-5E133DCB1475}"
+	ProjectSection(SolutionItems) = preProject
+		README.md = README.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
-	GlobalSection(SolutionProperties) = preSolution
-		HideSolutionNode = FALSE
-	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{1F4E6D3D-445C-441A-9FD0-F8FF88C9A259}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{1F4E6D3D-445C-441A-9FD0-F8FF88C9A259}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1F4E6D3D-445C-441A-9FD0-F8FF88C9A259}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1F4E6D3D-445C-441A-9FD0-F8FF88C9A259}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
 	EndGlobalSection
 EndGlobal
