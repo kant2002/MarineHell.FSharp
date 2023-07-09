@@ -15,9 +15,9 @@ let CalculateSides (wp : Deque<WalkPosition>) =
         for j = 0 to wp.Count - 1 do
             let d = wp[i].GetDistance(wp[j])
             if (d > d_max) then
-                    d_max <- d;
-                    p1 <- wp[i];
-                    p2 <- wp[j];
+                    d_max <- d
+                    p1 <- wp[i]
+                    p2 <- wp[j]
 
     (p1.ToPosition(), p2.ToPosition())
 
@@ -40,17 +40,17 @@ let GetShortestPath (map: Map) (start : TilePosition) (_end: TilePosition) =
             let t0 = curr.Center.ToTilePosition()
             let t1 = next.Center.ToTilePosition()
             //trace a ray
-            let mutable dx = abs(t1.x - t0.x);
-            let mutable dy = abs(t1.y - t0.y);
-            let mutable x = t0.x;
-            let mutable y = t0.y;
-            let n = 1 + dx + dy;
+            let mutable dx = abs(t1.x - t0.x)
+            let mutable dy = abs(t1.y - t0.y)
+            let mutable x = t0.x
+            let mutable y = t0.y
+            let n = 1 + dx + dy
             let x_inc = if (t1.x > t0.x) then 1 else -1
-            let y_inc = if (t1.x > t0.x) then 1 else -1;
-            let mutable error = dx - dy;
+            let y_inc = if (t1.x > t0.x) then 1 else -1
+            let mutable error = dx - dy
 
-            dx <- dx * 2;
-            dy <- dy * 2;
+            dx <- dx * 2
+            dy <- dy * 2
 
             for i = 0 to n-1 do
                 shortestPath.Add(new TilePosition(x, y))
@@ -71,6 +71,13 @@ let GetNearestBaseLocation (bases: Base seq) tilePosition =
 let GetStartLocation (bases: Base seq) (player : Player) =
     let startLocation = player.GetStartLocation()
     GetNearestBaseLocation bases startLocation
+    
+    
+let invalidateUnitIfDead (unit:Unit) =
+    if unit <> null && not (unit.Exists()) then
+        null
+    else
+        unit
 
 type MarineHell() =
     inherit DefaultBWListener()
@@ -85,13 +92,10 @@ type MarineHell() =
     [<DefaultValue>] val mutable private _bunkerBuilder : Unit
     [<DefaultValue>] val mutable private _searcher : Unit
     let mutable _debugText = ""
-    let _enemyBuildingMemory = new HashSet<Position>()
+    let _enemyBuildingMemory = HashSet<Position>()
     let mutable _selectedStrategy = WaitFor50
     [<DefaultValue>] val mutable private _chokePointsCenters : Position list
     [<DefaultValue>] val mutable private map : Map
-
-    member this.GetNearestChokepointCenter position = 
-        GetNearestChokepointCenter position this._chokePointsCenters
 
     member private this.GetBuildTile (game: Game) (builder:Unit) (buildingType:UnitType) (aroundTile:TilePosition) : TilePosition =
         let mutable ret = TilePosition.Invalid
@@ -117,23 +121,23 @@ type MarineHell() =
             while ((maxDist < stopDist) && (ret = TilePosition.Invalid)) do
                 for i = aroundTile.X - maxDist to aroundTile.X + maxDist do
                     for j = aroundTile.Y - maxDist to aroundTile.Y + maxDist do
-                        if (game.CanBuildHere(new TilePosition(i, j), buildingType, builder, false)) then
+                        if (game.CanBuildHere(TilePosition(i, j), buildingType, builder, false)) then
                             _cyclesForSearching <- _cyclesForSearching + game.GetAllUnits().Count
                             let unitsInWay = game.GetAllUnits() |> Seq.exists (fun u -> u.GetID() <> builder.GetID() && (abs(u.GetTilePosition().X - i) < 4) && (abs(u.GetTilePosition().Y - j) < 4))
-                            if (not  unitsInWay) then
+                            if (not unitsInWay) then
                                 _cyclesForSearching <- _cyclesForSearching + 1
-                                ret <- new TilePosition(i, j)
+                                ret <- TilePosition(i, j)
 
                 maxDist <- maxDist + 2
 
             if (ret = TilePosition.Invalid) then
-                game.Printf($"Unable to find suitable build position for {buildingType}");
+                game.Printf($"Unable to find suitable build position for {buildingType}")
 
             ret
 
     member this.Run() =
-        this._bwClient <- new BWClient(this);
-        this._bwClient.StartGame();
+        this._bwClient <- new BWClient(this)
+        this._bwClient.StartGame()
 
     override this.OnStart() =
         let game = this._bwClient.Game
@@ -154,22 +158,22 @@ type MarineHell() =
         this.map <- map
 
         this._chokePointsCenters <- map.ChokePoints |> Seq.map (fun c -> 
-            let (left, right) = CalculateSides(new Deque<WalkPosition>(c.Geometry));
-            let center = (left + right) / 2;
+            let (left, right) = CalculateSides(new Deque<WalkPosition>(c.Geometry))
+            let center = (left + right) / 2
             center) |> Seq.toList
 
     override this.OnFrame() =
         let game = this._bwClient.Game
         let self = game.Self()
         let map = this.map
-        let bases = this.map.Bases
+        let bases = map.Bases
 
         game.DrawTextScreen(10, 10, $"Playing as {self.GetName()} - {self.GetRace()}")
-        game.DrawTextScreen(10, 20, $"Units: {self.GetUnits().Count}; Enemies: {_enemyBuildingMemory.Count}");
-        game.DrawTextScreen(10, 30, $"Cycles for buildings: {_cyclesForSearching}; Max cycles: {_maxCyclesForSearching}");
-        game.DrawTextScreen(10, 40, $"Elapsed time: {game.ElapsedTime()}; Strategy: {_selectedStrategy}");
-        game.DrawTextScreen(10, 50, _debugText);
-        game.DrawTextScreen(10, 60, $"supply: {self.SupplyTotal()} used: {self.SupplyUsed()}");
+        game.DrawTextScreen(10, 20, $"Units: {self.GetUnits().Count}; Enemies: {_enemyBuildingMemory.Count}")
+        game.DrawTextScreen(10, 30, $"Cycles for buildings: {_cyclesForSearching}; Max cycles: {_maxCyclesForSearching}")
+        game.DrawTextScreen(10, 40, $"Elapsed time: {game.ElapsedTime()}; Strategy: {_selectedStrategy}")
+        game.DrawTextScreen(10, 50, _debugText)
+        game.DrawTextScreen(10, 60, $"supply: {self.SupplyTotal()} used: {self.SupplyUsed()}")
 
         (*
         * if (_game.elapsedTime() > 2001) { int x = (_game.elapsedTime() / 500) %
@@ -185,23 +189,20 @@ type MarineHell() =
 
         _cyclesForSearching <- 0
 
-        let workers = new List<Unit>()
-        let barracks = new List<Unit>()
-        let marines = new List<Unit>()
-        let baseLocations = new List<Base>()
-        let allLocations = new List<Base>()
+        let workers = List<Unit>()
+        let barracks = List<Unit>()
+        let marines = List<Unit>()
+        let baseLocations = List<Base>()
+        let allLocations = List<Base>()
         let mutable workerAttacked = Position.Invalid
 
         let mutable commandCenter : Unit option = None
         let mutable bunker : Unit option = None
 
-        if this._bunkerBuilder <> null && not(this._bunkerBuilder.Exists()) then
-            this._bunkerBuilder <- null
+        this._bunkerBuilder <- invalidateUnitIfDead this._bunkerBuilder
+        this._searcher <- invalidateUnitIfDead this._searcher
 
-        if this._searcher <> null && not(this._searcher.Exists()) then
-            this._searcher <- null
-
-        if (this._searcher <> null) then
+        if isNull this._searcher then
             game.DrawTextMap(this._searcher.GetPosition(), "Mr. Searcher")
 
         // iterate through my units
@@ -266,11 +267,13 @@ type MarineHell() =
             game.SetLocalSpeed(20)
             if (_timeout < 200) then
                 game.DrawTextMap(this._bunkerBuilder.GetPosition(), $"Moving to create bunker {_timeout}/400")
-                this._bunkerBuilder.Move(this.GetNearestChokepointCenter(this._bunkerBuilder.GetPosition())) |> ignore
+                let bunkerLocation = GetNearestChokepointCenter (this._bunkerBuilder.GetPosition()) this._chokePointsCenters
+                this._bunkerBuilder.Move bunkerLocation |> ignore
                 _timeout <- _timeout + 1
             else
                 game.DrawTextMap(this._bunkerBuilder.GetPosition(), "Buiding bunker")
-                let buildTile = this.GetBuildTile game this._bunkerBuilder UnitType.Terran_Barracks (this._bunkerBuilder.GetTilePosition())
+                let curretBunkerBuilderPosition = this._bunkerBuilder.GetTilePosition()
+                let buildTile = this.GetBuildTile game this._bunkerBuilder UnitType.Terran_Barracks curretBunkerBuilderPosition
                 if buildTile <> TilePosition.Invalid then
                     this._bunkerBuilder.Build(UnitType.Terran_Bunker, buildTile) |> ignore
         elif (workers.Count > 10) then
@@ -349,8 +352,8 @@ type MarineHell() =
                             | Some(bunker) ->
                                 match GetShortestPath map (bunker.GetTilePosition()) ((GetStartLocation bases  self).Location) with
                                 | path when path.Count > 1 -> path[1].ToPosition()
-                                | _ -> this.GetNearestChokepointCenter(marinePosition)
-                            | None -> this.GetNearestChokepointCenter(marinePosition)
+                                | _ -> GetNearestChokepointCenter marinePosition this._chokePointsCenters
+                            | None -> GetNearestChokepointCenter marinePosition this._chokePointsCenters
 
                         let newPos = findClosestChokepoint bunker
                         marine.Attack(newPos) |> ignore
@@ -372,7 +375,7 @@ type MarineHell() =
 
             if workers.Count <> 0 then
                 let lastWorker = if workers.Count > 7 then workers[7] else workers[workers.Count - 1]
-                _debugText <- $"Size: {workers.Count}; isGathering{lastWorker.IsGatheringMinerals()}; location: {baseLocations.Count}; num: {_searchingScv}";
+                _debugText <- $"Size: {workers.Count}; isGathering{lastWorker.IsGatheringMinerals()}; location: {baseLocations.Count}; num: {_searchingScv}"
 
             let enemyUnits = game.Enemy().GetUnits()
             let enemyBuildings = enemyUnits |> Seq.filter (fun u -> u.GetUnitType().IsBuilding())
@@ -400,5 +403,5 @@ type MarineHell() =
             ) |> ignore
         
 printfn "MarineHell in F#"
-let bot = new MarineHell();
-bot.Run();
+let bot = new MarineHell()
+bot.Run()
