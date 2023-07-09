@@ -36,7 +36,7 @@ let GetShortestPath (map: Map) (start : TilePosition) (_end: TilePosition) =
     let _length = ref 0
     let mutable curr: ChokePoint = null
     for next in map.GetPath(start.ToPosition(), _end.ToPosition(), _length) do
-        if curr <> null then
+        if not (isNull curr) then
             let t0 = curr.Center.ToTilePosition()
             let t1 = next.Center.ToTilePosition()
             //trace a ray
@@ -202,7 +202,7 @@ type MarineHell() =
         this._bunkerBuilder <- invalidateUnitIfDead this._bunkerBuilder
         this._searcher <- invalidateUnitIfDead this._searcher
 
-        if isNull this._searcher then
+        if not (isNull this._bunkerBuilder) then
             game.DrawTextMap(this._searcher.GetPosition(), "Mr. Searcher")
 
         // iterate through my units
@@ -236,7 +236,7 @@ type MarineHell() =
             |> Seq.filter idle_worker // if it's a worker and it's idle, 
             |> Seq.iter (fun myUnit -> // send it to the closest mineral patch
                 let planToBuildBarrack = match (bunker) with
-                                            | None -> this._bunkerBuilder <> null && myUnit.Equals(this._bunkerBuilder) && barracks.Count > 0
+                                            | None -> not (isNull this._bunkerBuilder) && myUnit.Equals(this._bunkerBuilder) && barracks.Count > 0
                                             | Some(_) -> false
 
                 // find the closest mineral
@@ -281,7 +281,7 @@ type MarineHell() =
             game.DrawTextMap(workers[10].GetPosition(), "He will build bunker")
 
         match bunker with
-        | Some(bunker) when this._bunkerBuilder <> null && this._bunkerBuilder.IsRepairing() = false ->
+        | Some(bunker) when not (isNull this._bunkerBuilder) && this._bunkerBuilder.IsRepairing() = false ->
             game.DrawTextMap(this._bunkerBuilder.GetPosition(), "Reparing bunker")
             this._bunkerBuilder.Repair(bunker) |> ignore
         | _ -> ()
@@ -369,7 +369,7 @@ type MarineHell() =
             if (workers.Count > 7 && this._searcher = null) then
                 this._searcher <- workers[7]
 
-            if (this._searcher <> null && this._searcher.IsGatheringMinerals() && _searchingScv < baseLocations.Count && _searchingTimeout % 10 = 0) then
+            if (not (isNull this._searcher) && this._searcher.IsGatheringMinerals() && _searchingScv < baseLocations.Count && _searchingTimeout % 10 = 0) then
                 this._searcher.Move(baseLocations[_searchingScv].Center) |> ignore
                 _searchingScv <- _searchingScv + 1
 
